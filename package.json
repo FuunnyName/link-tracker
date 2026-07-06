@@ -1,0 +1,21 @@
+{
+  "name": "link-tracker",
+  "version": "1.0.0",
+  "description": "Wrap a link with a consent page that captures device info and location, then redirects.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "nanoid": "^3.3.7",
+    "ua-parser-js": "^1.0.39"
+  }
+}

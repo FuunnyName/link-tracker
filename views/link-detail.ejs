@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visits for <%= link.label || link.slug %></title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wide-card">
+    <div class="header-row">
+      <h1><%= link.label || link.slug %></h1>
+      <a href="/admin" class="btn btn-secondary btn-small">Back to dashboard</a>
+    </div>
+    <p><strong>Shareable link:</strong> <%= baseUrl %>/l/<%= link.slug %></p>
+    <p><strong>Destination:</strong> <%= link.target_url %></p>
+
+    <h2>Visits (<%= visits.length %>)</h2>
+    <% if (visits.length === 0) { %>
+      <p>No visits recorded yet.</p>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>IP</th>
+            <th>Device</th>
+            <th>Browser</th>
+            <th>OS</th>
+            <th>Location</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% visits.forEach(v => { %>
+            <tr>
+              <td><%= v.created_at %></td>
+              <td><%= v.ip %></td>
+              <td><%= v.device_type %></td>
+              <td><%= v.browser || '—' %></td>
+              <td><%= v.os || '—' %></td>
+              <td>
+                <% if (v.lat && v.lon) { %>
+                  <a href="https://www.google.com/maps?q=<%= v.lat %>,<%= v.lon %>" target="_blank">
+                    <%= v.lat.toFixed(4) %>, <%= v.lon.toFixed(4) %>
+                  </a>
+                  <% if (v.accuracy) { %> (±<%= Math.round(v.accuracy) %>m)<% } %>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+              <td><%= v.location_source %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</body>
+</html>

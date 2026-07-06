@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Continue to your link</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="card">
+    <h1>You're about to continue to a link</h1>
+
+    <p>Before we redirect you, here's what this page collects:</p>
+    <ul>
+      <li><strong>Basic device &amp; browser info</strong> (browser, operating system, device type) &mdash; collected automatically, the same way most websites do.</li>
+      <li><strong>Your approximate location</strong> &mdash; only if you choose to allow it below. If you don't allow it, we won't collect precise location.</li>
+    </ul>
+    <p>This data is visible to the person who created this link, for analytics purposes.</p>
+
+    <div id="status" class="status" style="display:none;"></div>
+
+    <button id="continueBtn" class="btn">Allow location &amp; continue</button>
+    <button id="skipBtn" class="btn btn-secondary">Continue without location</button>
+
+    <p class="fineprint">By clicking either button, you'll be redirected to the destination link.</p>
+  </div>
+
+  <script>
+    const slug = <%- JSON.stringify(slug) %>;
+    const statusEl = document.getElementById('status');
+    const continueBtn = document.getElementById('continueBtn');
+    const skipBtn = document.getElementById('skipBtn');
+
+    function setStatus(msg) {
+      statusEl.style.display = 'block';
+      statusEl.textContent = msg;
+    }
+
+    async function sendVisit(consented, location) {
+      setStatus('Redirecting…');
+      try {
+        const resp = await fetch(`/api/visit/${slug}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ consented, location }),
+        });
+        const data = await resp.json();
+        if (data.redirect) {
+          window.location.replace(data.redirect);
+        } else {
+          setStatus('Something went wrong. Please try again.');
+        }
+      } catch (err) {
+        setStatus('Something went wrong. Please try again.');
+      }
+    }
+
+    continueBtn.addEventListener('click', () => {
+      continueBtn.disabled = true;
+      skipBtn.disabled = true;
+
+      if (!navigator.geolocation) {
+        setStatus('Location is not supported on this device. Continuing…');
+        return sendVisit(false, null);
+      }
+
+      setStatus('Requesting location permission…');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          sendVisit(true, {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+        },
+        () => {
+          setStatus('Location permission denied. Continuing…');
+          sendVisit(false, null);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+
+    skipBtn.addEventListener('click', () => {
+      continueBtn.disabled = true;
+      skipBtn.disabled = true;
+      sendVisit(false, null);
+    });
+  </script>
+</body>
+</html>

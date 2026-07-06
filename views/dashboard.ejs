@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wide-card">
+    <div class="header-row">
+      <h1>Your wrapped links</h1>
+      <form method="POST" action="/admin/logout">
+        <button type="submit" class="btn btn-secondary btn-small">Log out</button>
+      </form>
+    </div>
+
+    <h2>Create a new link</h2>
+    <form method="POST" action="/admin/links" class="inline-form">
+      <input type="url" name="target_url" placeholder="https://example.com/destination" required />
+      <input type="text" name="label" placeholder="Label (optional)" />
+      <input type="text" name="custom_slug" placeholder="Custom slug (optional)" />
+      <button type="submit" class="btn">Create</button>
+    </form>
+
+    <h2>Existing links</h2>
+    <% if (links.length === 0) { %>
+      <p>No links yet. Create one above.</p>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Shareable link</th>
+            <th>Destination</th>
+            <th>Visits</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% links.forEach(link => { %>
+            <tr>
+              <td><%= link.label || '—' %></td>
+              <td><a href="<%= baseUrl %>/l/<%= link.slug %>" target="_blank"><%= baseUrl %>/l/<%= link.slug %></a></td>
+              <td class="truncate"><%= link.target_url %></td>
+              <td><a href="/admin/links/<%= link.id %>"><%= link.visit_count %> view details</a></td>
+              <td><%= link.created_at %></td>
+              <td>
+                <form method="POST" action="/admin/links/<%= link.id %>/delete" onsubmit="return confirm('Delete this link and all its visit data?');">
+                  <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</body>
+</html>
