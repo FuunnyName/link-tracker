@@ -28,7 +28,9 @@ router.get('/', requireAuth, (req, res) => {
   const links = db
     .prepare(
       `SELECT links.*,
-        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id) AS visit_count
+        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id) AS visit_count,
+        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 1) AS consented_count,
+        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 0) AS skipped_count
        FROM links ORDER BY links.created_at DESC`
     )
     .all();
