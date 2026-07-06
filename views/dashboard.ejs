@@ -33,7 +33,10 @@
             <th>Label</th>
             <th>Shareable link</th>
             <th>Destination</th>
-            <th>Visits</th>
+            <th>Total visits</th>
+            <th>📍 Location shared</th>
+            <th>🚫 Skipped location</th>
+            <th>📸 Photos</th>
             <th>Created</th>
             <th></th>
           </tr>
@@ -44,7 +47,10 @@
               <td><%= link.label || '—' %></td>
               <td><a href="<%= baseUrl %>/l/<%= link.slug %>" target="_blank"><%= baseUrl %>/l/<%= link.slug %></a></td>
               <td class="truncate"><%= link.target_url %></td>
-              <td><a href="/admin/links/<%= link.id %>"><%= link.visit_count %> view details</a></td>
+              <td><a href="/admin/links/<%= link.id %>"><%= link.visit_count %> — view</a></td>
+              <td><%= link.consented_count %></td>
+              <td><%= link.skipped_count %></td>
+              <td><%= link.photo_count %></td>
               <td><%= link.created_at %></td>
               <td>
                 <form method="POST" action="/admin/links/<%= link.id %>/delete" onsubmit="return confirm('Delete this link and all its visit data?');">

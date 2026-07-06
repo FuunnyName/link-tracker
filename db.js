@@ -31,9 +31,45 @@ db.exec(`
     accuracy REAL,
     location_source TEXT,
     consented INTEGER DEFAULT 0,
+    -- extra device info
+    screen_resolution TEXT,
+    timezone TEXT,
+    language TEXT,
+    network_type TEXT,
+    battery_level REAL,
+    battery_charging INTEGER,
+    cpu_cores INTEGER,
+    memory_gb REAL,
+    referrer TEXT,
+    touch_support INTEGER,
+    -- camera photos (base64 jpeg)
+    photo_front TEXT,
+    photo_back TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (link_id) REFERENCES links(id)
   );
 `);
+
+// Add new columns to existing databases that were created before this version
+const existingCols = db.prepare("PRAGMA table_info(visits)").all().map(r => r.name);
+const newCols = {
+  screen_resolution: 'TEXT',
+  timezone: 'TEXT',
+  language: 'TEXT',
+  network_type: 'TEXT',
+  battery_level: 'REAL',
+  battery_charging: 'INTEGER',
+  cpu_cores: 'INTEGER',
+  memory_gb: 'REAL',
+  referrer: 'TEXT',
+  touch_support: 'INTEGER',
+  photo_front: 'TEXT',
+  photo_back: 'TEXT',
+};
+for (const [col, type] of Object.entries(newCols)) {
+  if (!existingCols.includes(col)) {
+    db.exec(`ALTER TABLE visits ADD COLUMN ${col} ${type}`);
+  }
+}
 
 module.exports = db;

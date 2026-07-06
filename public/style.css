@@ -173,3 +173,123 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.stat-box {
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 130px;
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1c1e21;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Visit cards */
+.visit-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.visit-header {
+  background: #f9fafb;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.visit-time {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.visit-body {
+  padding: 16px;
+}
+
+/* Photos */
+.photo-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.photo-box {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.photo-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.photo-box img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* Data grid */
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.data-item {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.data-key {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 2px;
+  letter-spacing: 0.05em;
+}
+
+.data-val {
+  font-size: 14px;
+  color: #1c1e21;
+  word-break: break-all;
+}
+
+.badge {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  margin-left: 4px;
+}

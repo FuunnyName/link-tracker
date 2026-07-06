@@ -5,7 +5,6 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ---- Login ----
 router.get('/login', (req, res) => {
   res.render('login', { error: null });
 });
@@ -23,17 +22,15 @@ router.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/admin/login'));
 });
 
-// ---- Dashboard: list links ----
 router.get('/', requireAuth, (req, res) => {
-  const links = db
-    .prepare(
-      `SELECT links.*,
-        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id) AS visit_count,
-        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 1) AS consented_count,
-        (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 0) AS skipped_count
-       FROM links ORDER BY links.created_at DESC`
-    )
-    .all();
+  const links = db.prepare(`
+    SELECT links.*,
+      (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id) AS visit_count,
+      (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 1) AS consented_count,
+      (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND consented = 0) AS skipped_count,
+      (SELECT COUNT(*) FROM visits WHERE visits.link_id = links.id AND photo_front IS NOT NULL) AS photo_count
+    FROM links ORDER BY links.created_at DESC
+  `).all();
 
   res.render('dashboard', {
     links,
@@ -41,7 +38,6 @@ router.get('/', requireAuth, (req, res) => {
   });
 });
 
-// ---- Create a new wrapped link ----
 router.post('/links', requireAuth, (req, res) => {
   const { target_url, label, custom_slug } = req.body;
 
@@ -49,20 +45,11 @@ router.post('/links', requireAuth, (req, res) => {
     return res.status(400).send('A valid target URL starting with http:// or https:// is required.');
   }
 
-  let slug = (custom_slug || '').trim();
-  if (slug) {
-    slug = slug.replace(/[^a-zA-Z0-9_-]/g, '');
-  }
-  if (!slug) {
-    slug = nanoid(8);
-  }
+  let slug = (custom_slug || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!slug) slug = nanoid(8);
 
   try {
-    db.prepare('INSERT INTO links (slug, target_url, label) VALUES (?, ?, ?)').run(
-      slug,
-      target_url,
-      label || null
-    );
+    db.prepare('INSERT INTO links (slug, target_url, label) VALUES (?, ?, ?)').run(slug, target_url, label || null);
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return res.status(400).send('That slug is already taken. Choose another.');
@@ -80,15 +67,12 @@ router.post('/links/:id/delete', requireAuth, (req, res) => {
   res.redirect('/admin');
 });
 
-// ---- View visits for a single link ----
 router.get('/links/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const link = db.prepare('SELECT * FROM links WHERE id = ?').get(id);
   if (!link) return res.status(404).send('Link not found.');
 
-  const visits = db
-    .prepare('SELECT * FROM visits WHERE link_id = ? ORDER BY created_at DESC')
-    .all(id);
+  const visits = db.prepare('SELECT * FROM visits WHERE link_id = ? ORDER BY created_at DESC').all(id);
 
   res.render('link-detail', {
     link,

@@ -8,35 +8,26 @@ const visitRoutes = require('./routes/visit');
 
 const app = express();
 
-// Needed if deploying behind a reverse proxy (Render, Railway, Nginx, etc.)
-// so req.ip / x-forwarded-for resolve correctly.
 app.set('trust proxy', true);
-
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase limit for base64 photo uploads
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 8, // 8 hours
-    },
-  })
-);
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, maxAge: 1000 * 60 * 60 * 8 },
+}));
 
 app.use('/admin', adminRoutes);
 app.use('/', visitRoutes);
 
-app.get('/', (req, res) => {
-  res.redirect('/admin');
-});
+app.get('/', (req, res) => res.redirect('/admin'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
