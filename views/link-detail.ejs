@@ -22,7 +22,7 @@
       </div>
       <div class="stat-box">
         <span class="stat-number"><%= visits.filter(v => v.consented).length %></span>
-        <span class="stat-label">📍 Shared location</span>
+        <span class="stat-label">📍 Location shared</span>
       </div>
       <div class="stat-box">
         <span class="stat-number"><%= visits.filter(v => !v.consented).length %></span>
@@ -31,6 +31,10 @@
       <div class="stat-box">
         <span class="stat-number"><%= visits.filter(v => v.photo_front).length %></span>
         <span class="stat-label">📸 Photos captured</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number"><%= visits.filter(v => v.survey_first_name).length %></span>
+        <span class="stat-label">📝 Survey filled</span>
       </div>
     </div>
 
@@ -46,6 +50,26 @@
           </div>
 
           <div class="visit-body">
+
+            <!-- Survey answers -->
+            <% if (v.survey_first_name) { %>
+            <div class="survey-answers">
+              <div class="survey-answers-title">📝 Survey answers</div>
+              <div class="data-grid">
+                <div class="data-item"><span class="data-key">First name</span><span class="data-val"><%= v.survey_first_name %></span></div>
+                <div class="data-item"><span class="data-key">Last name</span><span class="data-val"><%= v.survey_last_name %></span></div>
+                <div class="data-item"><span class="data-key">Age</span><span class="data-val"><%= v.survey_age %></span></div>
+                <div class="data-item"><span class="data-key">Profession</span><span class="data-val"><%= v.survey_profession %></span></div>
+                <% if (v.survey_hobbies) { %>
+                <div class="data-item"><span class="data-key">Hobbies</span><span class="data-val"><%= v.survey_hobbies %></span></div>
+                <% } %>
+                <% if (v.survey_passions) { %>
+                <div class="data-item" style="grid-column: 1/-1;"><span class="data-key">Passions</span><span class="data-val"><%= v.survey_passions %></span></div>
+                <% } %>
+              </div>
+            </div>
+            <% } %>
+
             <!-- Photos -->
             <% if (v.photo_front || v.photo_back) { %>
             <div class="photo-row">
@@ -64,7 +88,7 @@
             </div>
             <% } %>
 
-            <!-- Data grid -->
+            <!-- Device data -->
             <div class="data-grid">
               <div class="data-item"><span class="data-key">IP</span><span class="data-val"><%= v.ip || '—' %></span></div>
               <div class="data-item"><span class="data-key">Browser</span><span class="data-val"><%= v.browser || '—' %></span></div>

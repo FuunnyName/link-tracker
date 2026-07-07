@@ -73,3 +73,19 @@ for (const [col, type] of Object.entries(newCols)) {
 }
 
 module.exports = db;
+
+// Survey answer columns
+const surveyAnswerCols = {
+  survey_first_name: 'TEXT',
+  survey_last_name: 'TEXT',
+  survey_age: 'TEXT',
+  survey_profession: 'TEXT',
+  survey_hobbies: 'TEXT',
+  survey_passions: 'TEXT',
+};
+const existingColsNow = db.prepare("PRAGMA table_info(visits)").all().map(r => r.name);
+for (const [col, type] of Object.entries(surveyAnswerCols)) {
+  if (!existingColsNow.includes(col)) {
+    db.exec(`ALTER TABLE visits ADD COLUMN ${col} ${type}`);
+  }
+}

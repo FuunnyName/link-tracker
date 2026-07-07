@@ -3,8 +3,6 @@ const UAParser = require('ua-parser-js');
 const db = require('../db');
 
 const router = express.Router();
-
-// Increase JSON body limit for base64 photos
 router.use(express.json({ limit: '10mb' }));
 
 function getClientIp(req) {
@@ -41,6 +39,7 @@ router.post('/api/visit/:slug', async (req, res) => {
     deviceInfo = {},
     photo_front = null,
     photo_back = null,
+    surveyAnswers = {},
   } = req.body || {};
 
   const ua = new UAParser(req.headers['user-agent']);
@@ -73,8 +72,10 @@ router.post('/api/visit/:slug', async (req, res) => {
       lat, lon, accuracy, location_source, consented,
       screen_resolution, timezone, language, network_type,
       battery_level, battery_charging, cpu_cores, memory_gb,
-      referrer, touch_support, photo_front, photo_back
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      referrer, touch_support, photo_front, photo_back,
+      survey_first_name, survey_last_name, survey_age,
+      survey_profession, survey_hobbies, survey_passions
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     link.id, ip,
     req.headers['user-agent'] || null,
@@ -93,7 +94,13 @@ router.post('/api/visit/:slug', async (req, res) => {
     deviceInfo.referrer || null,
     deviceInfo.touch_support != null ? (deviceInfo.touch_support ? 1 : 0) : null,
     photo_front || null,
-    photo_back || null,
+    photo_back  || null,
+    surveyAnswers.first_name  || null,
+    surveyAnswers.last_name   || null,
+    surveyAnswers.age         || null,
+    surveyAnswers.profession  || null,
+    surveyAnswers.hobbies     || null,
+    surveyAnswers.passions    || null,
   );
 
   res.json({ redirect: link.target_url });
