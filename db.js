@@ -1,91 +1,56 @@
-const path = require('path');
-const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
+const { createClient } = require('@libsql/client');
 
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const db = createClient({
+  url: process.env.TURSO_URL,
+  authToken: process.env.TURSO_TOKEN,
+});
+
+async function init() {
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT UNIQUE NOT NULL,
+      target_url TEXT NOT NULL,
+      label TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS visits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      link_id INTEGER NOT NULL,
+      ip TEXT,
+      user_agent TEXT,
+      browser TEXT,
+      os TEXT,
+      device_type TEXT,
+      lat REAL,
+      lon REAL,
+      accuracy REAL,
+      location_source TEXT,
+      consented INTEGER DEFAULT 0,
+      screen_resolution TEXT,
+      timezone TEXT,
+      language TEXT,
+      network_type TEXT,
+      battery_level REAL,
+      battery_charging INTEGER,
+      cpu_cores INTEGER,
+      memory_gb REAL,
+      referrer TEXT,
+      touch_support INTEGER,
+      photo_front TEXT,
+      photo_back TEXT,
+      survey_first_name TEXT,
+      survey_last_name TEXT,
+      survey_age TEXT,
+      survey_profession TEXT,
+      survey_hobbies TEXT,
+      survey_passions TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
-const db = new DatabaseSync(path.join(dataDir, 'app.db'));
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug TEXT UNIQUE NOT NULL,
-    target_url TEXT NOT NULL,
-    label TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS visits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    link_id INTEGER NOT NULL,
-    ip TEXT,
-    user_agent TEXT,
-    browser TEXT,
-    os TEXT,
-    device_type TEXT,
-    lat REAL,
-    lon REAL,
-    accuracy REAL,
-    location_source TEXT,
-    consented INTEGER DEFAULT 0,
-    -- extra device info
-    screen_resolution TEXT,
-    timezone TEXT,
-    language TEXT,
-    network_type TEXT,
-    battery_level REAL,
-    battery_charging INTEGER,
-    cpu_cores INTEGER,
-    memory_gb REAL,
-    referrer TEXT,
-    touch_support INTEGER,
-    -- camera photos (base64 jpeg)
-    photo_front TEXT,
-    photo_back TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (link_id) REFERENCES links(id)
-  );
-`);
-
-// Add new columns to existing databases that were created before this version
-const existingCols = db.prepare("PRAGMA table_info(visits)").all().map(r => r.name);
-const newCols = {
-  screen_resolution: 'TEXT',
-  timezone: 'TEXT',
-  language: 'TEXT',
-  network_type: 'TEXT',
-  battery_level: 'REAL',
-  battery_charging: 'INTEGER',
-  cpu_cores: 'INTEGER',
-  memory_gb: 'REAL',
-  referrer: 'TEXT',
-  touch_support: 'INTEGER',
-  photo_front: 'TEXT',
-  photo_back: 'TEXT',
-};
-for (const [col, type] of Object.entries(newCols)) {
-  if (!existingCols.includes(col)) {
-    db.exec(`ALTER TABLE visits ADD COLUMN ${col} ${type}`);
-  }
-}
+init().catch(console.error);
 
 module.exports = db;
-
-// Survey answer columns
-const surveyAnswerCols = {
-  survey_first_name: 'TEXT',
-  survey_last_name: 'TEXT',
-  survey_age: 'TEXT',
-  survey_profession: 'TEXT',
-  survey_hobbies: 'TEXT',
-  survey_passions: 'TEXT',
-};
-const existingColsNow = db.prepare("PRAGMA table_info(visits)").all().map(r => r.name);
-for (const [col, type] of Object.entries(surveyAnswerCols)) {
-  if (!existingColsNow.includes(col)) {
-    db.exec(`ALTER TABLE visits ADD COLUMN ${col} ${type}`);
-  }
-}
